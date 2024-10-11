@@ -1164,9 +1164,7 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 			exit(received_sigterm == SIGTERM ? 0 : 255);
 		}
 		if (ostartups != startups) {
-			setproctitle("%s [listener] %d of %d-%d startups",
-			    listener_proctitle, startups,
-			    options.max_startups_begin, options.max_startups);
+			setproctitle("%s", listener_proctitle);
 			ostartups = startups;
 		}
 		if (received_sighup) {
@@ -1509,14 +1507,18 @@ accumulate_host_timing_secret(struct sshbuf *server_cfg,
 }
 
 static char *
-prepare_proctitle(int ac, char **av)
+prepare_proctitle(int ac, char **av, const char *mimic_name)
 {
-	char *ret = NULL;
-	int i;
+	if (mimic_name == NULL) {
+		char *ret = NULL;
+		int i;
 
-	for (i = 0; i < ac; i++)
-		xextendf(&ret, " ", "%s", av[i]);
-	return ret;
+		for (i = 0; i < ac; i++)
+			xextendf(&ret, " ", "%s", av[i]);
+		return ret;
+	} else {
+		return mimic_name;
+	}
 }
 
 static void
@@ -1546,7 +1548,7 @@ main(int ac, char **av)
 	int r, opt, on = 1, do_dump_cfg = 0, already_daemon, remote_port;
 	int sock_in = -1, sock_out = -1, newsock = -1;
 	const char *remote_ip, *rdomain;
-	char *fp, *line, *laddr, *logfile = NULL;
+	char *fp, *line, *laddr, *logfile = NULL, *mimic_name = NULL;
 	int config_s[2] = { -1 , -1 };
 	u_int i, j;
 	u_int64_t ibytes, obytes;
@@ -1591,7 +1593,7 @@ main(int ac, char **av)
 
 	/* Parse command-line arguments. */
 	while ((opt = getopt(ac, av,
-	    "C:E:b:c:f:g:h:k:o:p:u:46DGQRTdeiqrtV")) != -1) {
+	    "C:E:b:c:f:g:h:k:o:p:u:M:46DGQRTdeiqrtV")) != -1) {
 		switch (opt) {
 		case '4':
 			options.address_family = AF_INET;
@@ -1699,6 +1701,9 @@ main(int ac, char **av)
 			fprintf(stderr, "%s, %s\n",
 			    SSH_RELEASE, SSH_OPENSSL_VERSION);
 			exit(0);
+		case 'M':
+			mimic_name = optarg;
+			break;
 		default:
 			usage();
 			break;
@@ -2025,7 +2030,7 @@ main(int ac, char **av)
 		rexec_argv[rexec_argc] = "-R";
 		rexec_argv[rexec_argc + 1] = NULL;
 	}
-	listener_proctitle = prepare_proctitle(ac, av);
+	listener_proctitle = prepare_proctitle(ac, av, mimic_name);
 
 	/* Ensure that umask disallows at least group and world write */
 	new_umask = umask(0077) | 0022;
